@@ -4,7 +4,10 @@
   "description": "This is an open-source clone of the popular geometric construction game [Euclidea](https://www.euclidea.xyz/).",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "repository": {
     "type": "git",
@@ -21,11 +24,17 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
   },
   "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "undici-types": "^7.18.2"
   }
 }
