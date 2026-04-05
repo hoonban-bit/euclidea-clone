@@ -9,3 +9,7 @@ geometric concepts interactively.
 
 Please check `GOALS.md` for a comprehensive list of goals and features planned
 for this project.
+
+## Play Online
+
+You can play the latest version of the game directly in your browser here: **[Euclidea Clone Live](https://hoonban-bit.github.io/euclidea-clone/)**
