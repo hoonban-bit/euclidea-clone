@@ -1,0 +1,28 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "This is an open-source clone of the popular geometric construction game [Euclidea](https://www.euclidea.xyz/).",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://hoonban-bit:github.com/hoonban-bit/euclidea-clone.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/hoonban-bit/euclidea-clone/issues"
+  },
+  "homepage": "https://github.com/hoonban-bit/euclidea-clone#readme",
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "undici-types": "^7.18.2"
+  }
+}
