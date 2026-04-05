@@ -9,16 +9,16 @@ export class PointTool implements Tool {
     this.snapRadius = snapRadius;
   }
 
-  onDown(rawPoint: Point, board: Board): void {
+  onDown(rawPoint: Point, board: Board): Board {
     // Attempt to snap to an existing intersection
     const snapped = board.getSnapPoint(rawPoint, this.snapRadius);
     
     // In a real puzzle game like Euclidea, you can only create points ON intersections
     // or existing shapes. But for now, we'll allow creating free points if no snap exists.
     if (snapped) {
-      board.addPoint(snapped);
+      return board.addPoint(snapped);
     } else {
-      board.addPoint(rawPoint);
+      return board.addPoint(rawPoint);
     }
   }
 
@@ -26,8 +26,9 @@ export class PointTool implements Tool {
     // Point tool doesn't drag
   }
 
-  onUp(rawPoint: Point, board: Board): void {
+  onUp(rawPoint: Point, board: Board): Board {
     // Point tool action is complete on Down
+    return board;
   }
 
   reset(): void {}

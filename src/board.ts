@@ -10,66 +10,80 @@ export class Board {
   public operationCountL = 0;
   public operationCountE = 0;
 
-  addPoint(p: Point): boolean {
+  addPoint(p: Point): Board {
     if (this.points.some(existing => existing.equals(p))) {
-      return false; // Point already exists
+      return this; // Point already exists
     }
-    this.points.push(p);
-    return true;
+    const newBoard = this.clone();
+    newBoard.points.push(p);
+    return newBoard;
   }
 
-  addLine(l: Line): boolean {
+  addLine(l: Line): Board {
     if (this.lines.some(existing => existing.isParallelTo(l) && Math.abs(existing.c - l.c) < 1e-9)) {
-      return false; // Line already exists
+      return this; // Line already exists
     }
-    this.lines.push(l);
-    this.operationCountL++;
-    this.operationCountE++;
+    
+    let newBoard = this.clone();
+    newBoard.lines.push(l);
+    newBoard.operationCountL++;
+    newBoard.operationCountE++;
     
     // Auto-calculate intersections with existing geometry
-    this.calculateNewIntersectionsForLine(l);
+    newBoard = newBoard.calculateNewIntersectionsForLine(l);
     
-    return true;
+    return newBoard;
   }
 
-  addCircle(c: Circle): boolean {
+  addCircle(c: Circle): Board {
     if (this.circles.some(existing => existing.center.equals(c.center) && Math.abs(existing.radius - c.radius) < 1e-9)) {
-      return false; // Circle already exists
+      return this; // Circle already exists
     }
-    this.circles.push(c);
-    this.operationCountL++;
-    this.operationCountE++;
+    let newBoard = this.clone();
+    newBoard.circles.push(c);
+    newBoard.operationCountL++;
+    newBoard.operationCountE++;
 
     // Auto-calculate intersections with existing geometry
-    this.calculateNewIntersectionsForCircle(c);
+    newBoard = newBoard.calculateNewIntersectionsForCircle(c);
     
-    return true;
+    return newBoard;
   }
 
-  private calculateNewIntersectionsForLine(newLine: Line) {
+  private calculateNewIntersectionsForLine(newLine: Line): Board {
+    let currentBoard: Board = this;
     for (const existingLine of this.lines) {
       if (existingLine === newLine) continue;
       const pt = getLineLineIntersection(newLine, existingLine);
-      if (pt) this.addPoint(pt);
+      if (pt) currentBoard = currentBoard.addPoint(pt);
     }
 
     for (const existingCircle of this.circles) {
       const pts = getLineCircleIntersection(newLine, existingCircle);
-      pts.forEach(pt => this.addPoint(pt));
+      for (const pt of pts) {
+        currentBoard = currentBoard.addPoint(pt);
+      }
     }
+    return currentBoard;
   }
 
-  private calculateNewIntersectionsForCircle(newCircle: Circle) {
+  private calculateNewIntersectionsForCircle(newCircle: Circle): Board {
+    let currentBoard: Board = this;
     for (const existingLine of this.lines) {
       const pts = getLineCircleIntersection(existingLine, newCircle);
-      pts.forEach(pt => this.addPoint(pt));
+      for (const pt of pts) {
+        currentBoard = currentBoard.addPoint(pt);
+      }
     }
 
     for (const existingCircle of this.circles) {
       if (existingCircle === newCircle) continue;
       const pts = getCircleCircleIntersection(newCircle, existingCircle);
-      pts.forEach(pt => this.addPoint(pt));
+      for (const pt of pts) {
+        currentBoard = currentBoard.addPoint(pt);
+      }
     }
+    return currentBoard;
   }
 
   getSnapPoint(target: Point, snapRadius: number): Point | null {

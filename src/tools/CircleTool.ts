@@ -11,12 +11,12 @@ export class CircleTool implements Tool {
     this.snapRadius = snapRadius;
   }
 
-  onDown(rawPoint: Point, board: Board): void {
+  onDown(rawPoint: Point, board: Board): Board {
     const snapped = board.getSnapPoint(rawPoint, this.snapRadius);
     this.startPoint = snapped || rawPoint;
     
     // Auto-add the start point to the board if it's new
-    board.addPoint(this.startPoint);
+    return board.addPoint(this.startPoint);
   }
 
   onMove(rawPoint: Point, board: Board): void {
@@ -25,20 +25,23 @@ export class CircleTool implements Tool {
     this.currentDraftPoint = snapped || rawPoint;
   }
 
-  onUp(rawPoint: Point, board: Board): void {
-    if (!this.startPoint) return;
+  onUp(rawPoint: Point, board: Board): Board {
+    if (!this.startPoint) return board;
 
     const snapped = board.getSnapPoint(rawPoint, this.snapRadius);
     const endPoint = snapped || rawPoint;
 
+    let currentBoard = board;
+
     // A circle requires two distinct points (radius > 0)
     if (!this.startPoint.equals(endPoint)) {
-      board.addPoint(endPoint);
+      currentBoard = currentBoard.addPoint(endPoint);
       const newCircle = Circle.fromCenterAndPoint(this.startPoint, endPoint);
-      board.addCircle(newCircle);
+      currentBoard = currentBoard.addCircle(newCircle);
     }
 
     this.reset();
+    return currentBoard;
   }
 
   reset(): void {
