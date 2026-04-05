@@ -86,4 +86,15 @@ export class Board {
     
     return closest;
   }
+
+  clone(): Board {
+    const newBoard = new Board();
+    // We can safely copy references to Points, Lines, and Circles because they are currently treated as immutable structs
+    newBoard.points = [...this.points];
+    newBoard.lines = [...this.lines];
+    newBoard.circles = [...this.circles];
+    newBoard.operationCountL = this.operationCountL;
+    newBoard.operationCountE = this.operationCountE;
+    return newBoard;
+  }
 }

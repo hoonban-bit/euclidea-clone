@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, MouseEvent } from 'react';
 import { Board } from '../board';
 import { PointTool } from '../tools/PointTool';
 import { LineTool } from '../tools/LineTool';
+import { CircleTool } from '../tools/CircleTool';
 import { Point } from '../entities';
 import { Tool } from '../tools/Tool';
 
@@ -9,7 +10,11 @@ const SNAP_RADIUS = 15;
 
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [board] = useState(() => new Board());
+  
+  // Undo History
+  const [history, setHistory] = useState<Board[]>([]);
+  const [board, setBoard] = useState(() => new Board());
+  
   const [activeTool, setActiveTool] = useState<Tool>(new PointTool(SNAP_RADIUS));
   const [toolName, setToolName] = useState<string>("Point");
 
@@ -20,6 +25,7 @@ const App: React.FC = () => {
     // Add some initial geometry for testing
     board.addPoint(new Point(300, 300));
     board.addPoint(new Point(500, 300));
+    setHistory([board.clone()]);
     renderCanvas();
   }, []);
 
@@ -28,6 +34,32 @@ const App: React.FC = () => {
     setToolName(name);
     tool.reset();
     renderCanvas();
+  };
+
+  const saveHistory = () => {
+    setHistory(prev => [...prev, board.clone()]);
+  };
+
+  const handleUndo = () => {
+    if (history.length > 1) {
+      const newHistory = [...history];
+      newHistory.pop(); // Remove current state
+      const previousState = newHistory[newHistory.length - 1];
+      setBoard(previousState.clone());
+      setHistory(newHistory);
+      // We must reset the active tool to prevent draft artifacts
+      activeTool.reset(); 
+    }
+  };
+
+  const handleClear = () => {
+    const newBoard = new Board();
+    // Maintain the starting 2 points
+    newBoard.addPoint(new Point(300, 300));
+    newBoard.addPoint(new Point(500, 300));
+    setBoard(newBoard);
+    setHistory([newBoard.clone()]);
+    activeTool.reset();
   };
 
   const getCanvasPoint = (e: MouseEvent<HTMLCanvasElement>): Point => {
@@ -52,7 +84,15 @@ const App: React.FC = () => {
 
   const handlePointerUp = (e: MouseEvent<HTMLCanvasElement>) => {
     const p = getCanvasPoint(e);
+    const countBefore = board.points.length + board.lines.length + board.circles.length;
+    
     activeTool.onUp(p, board);
+    
+    const countAfter = board.points.length + board.lines.length + board.circles.length;
+    if (countAfter > countBefore) {
+      // Something was successfully added
+      saveHistory();
+    }
     renderCanvas();
   };
 
@@ -102,13 +142,20 @@ const App: React.FC = () => {
       ctx.fill();
     });
 
-    // Draw Drafts for Line Tool
-    if (activeTool instanceof LineTool && activeTool.startPoint && activeTool.currentDraftPoint) {
+    // Draw Drafts for Line and Circle Tools
+    if (activeTool.startPoint && activeTool.currentDraftPoint) {
       ctx.strokeStyle = '#999';
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      ctx.moveTo(activeTool.startPoint.x, activeTool.startPoint.y);
-      ctx.lineTo(activeTool.currentDraftPoint.x, activeTool.currentDraftPoint.y);
+      
+      if (activeTool instanceof LineTool) {
+        ctx.moveTo(activeTool.startPoint.x, activeTool.startPoint.y);
+        ctx.lineTo(activeTool.currentDraftPoint.x, activeTool.currentDraftPoint.y);
+      } else if (activeTool instanceof CircleTool) {
+        const radius = activeTool.startPoint.distanceTo(activeTool.currentDraftPoint);
+        ctx.arc(activeTool.startPoint.x, activeTool.startPoint.y, radius, 0, Math.PI * 2);
+      }
+      
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -147,8 +194,17 @@ const App: React.FC = () => {
         >
           Line Tool
         </button>
-        <div style={{ marginLeft: 'auto' }}>
-          Scores: L={board.operationCountL} E={board.operationCountE}
+        <button 
+          onClick={() => selectTool("Circle", new CircleTool(SNAP_RADIUS))}
+          style={{ background: toolName === "Circle" ? '#ff5722' : '#fff' }}
+        >
+          Circle Tool
+        </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+          <button onClick={handleUndo} disabled={history.length <= 1}>Undo</button>
+          <button onClick={handleClear}>Clear</button>
+          <span style={{ margin: 'auto 0' }}>Scores: L={board.operationCountL} E={board.operationCountE}</span>
         </div>
       </div>
       <div style={{ flex: 1, position: 'relative' }}>
