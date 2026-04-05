@@ -27,4 +27,7 @@ export interface Tool {
    * Called to reset the internal state of the tool (e.g. if the user cancels an action).
    */
   reset(): void;
+
+  startPoint?: Point | null;
+  currentDraftPoint?: Point | null;
 }
