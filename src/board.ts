@@ -19,6 +19,19 @@ export class Board {
     return newBoard;
   }
 
+  removePoint(target: Point): Board {
+    const pIndex = this.points.findIndex(p => p.equals(target));
+    if (pIndex === -1) {
+      return this; // Point not found
+    }
+    const newBoard = this.clone();
+    newBoard.points.splice(pIndex, 1);
+    
+    // We are deliberately keeping this simple. Real Euclidea deletes all derived geometry 
+    // when a parent is deleted. For now, we only delete the specific point.
+    return newBoard;
+  }
+
   addLine(l: Line): Board {
     if (this.lines.some(existing => existing.isParallelTo(l) && Math.abs(existing.c - l.c) < 1e-9)) {
       return this; // Line already exists

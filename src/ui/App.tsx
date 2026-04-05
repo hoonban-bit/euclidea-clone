@@ -3,6 +3,7 @@ import { Board } from '../board';
 import { PointTool } from '../tools/PointTool';
 import { LineTool } from '../tools/LineTool';
 import { CircleTool } from '../tools/CircleTool';
+import { EraserTool } from '../tools/EraserTool';
 import { Point } from '../entities';
 import { Tool } from '../tools/Tool';
 
@@ -76,6 +77,7 @@ const App: React.FC = () => {
     const updatedBoard = activeTool.onDown(p, board);
     if (updatedBoard !== board) {
       setBoard(updatedBoard);
+      setHistory(prev => [...prev, updatedBoard.clone()]);
     }
   };
 
@@ -214,6 +216,12 @@ const App: React.FC = () => {
           style={{ background: toolName === "Circle" ? '#ff5722' : '#fff' }}
         >
           Circle Tool
+        </button>
+        <button 
+          onClick={() => selectTool("Eraser", new EraserTool(SNAP_RADIUS))}
+          style={{ background: toolName === "Eraser" ? '#ff5722' : '#fff' }}
+        >
+          Eraser
         </button>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
