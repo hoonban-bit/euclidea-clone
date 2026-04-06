@@ -6,6 +6,7 @@ import { CircleTool } from '../tools/CircleTool';
 import { EraserTool } from '../tools/EraserTool';
 import { Point } from '../entities';
 import { Tool } from '../tools/Tool';
+import { level1 } from '../levels/level1';
 
 const SNAP_RADIUS = 15;
 
@@ -15,7 +16,8 @@ const App: React.FC = () => {
   
   // Undo History
   const [history, setHistory] = useState<Board[]>([]);
-  const [board, setBoard] = useState(() => new Board());
+  const [board, setBoard] = useState(() => level1.getInitialBoard());
+  const [isLevelComplete, setIsLevelComplete] = useState(false);
   
   const [activeTool, setActiveTool] = useState<Tool>(new PointTool(SNAP_RADIUS));
   const [toolName, setToolName] = useState<string>("Point");
@@ -29,10 +31,7 @@ const App: React.FC = () => {
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
   useEffect(() => {
-    // Add some initial geometry for testing
-    const initialBoard = new Board()
-      .addPoint(new Point(300, 300))
-      .addPoint(new Point(500, 300));
+    const initialBoard = level1.getInitialBoard();
     setBoard(initialBoard);
     setHistory([initialBoard.clone()]);
   }, []);
@@ -61,12 +60,11 @@ const App: React.FC = () => {
   };
 
   const handleClear = () => {
-    const newBoard = new Board()
-      .addPoint(new Point(300, 300))
-      .addPoint(new Point(500, 300));
+    const newBoard = level1.getInitialBoard();
     
     setBoard(newBoard);
     setHistory([newBoard.clone()]);
+    setIsLevelComplete(false);
     activeTool.reset();
   };
 
@@ -121,12 +119,19 @@ const App: React.FC = () => {
       return;
     }
 
+    if (isLevelComplete) return; // Prevent interaction after winning
+
     const p = getCanvasPoint(e);
     const updatedBoard = activeTool.onUp(p, board);
     
     if (updatedBoard !== board) {
       setBoard(updatedBoard);
       setHistory(prev => [...prev, updatedBoard.clone()]);
+      
+      // Verify level completion
+      if (level1.isComplete(updatedBoard)) {
+        setIsLevelComplete(true);
+      }
     }
   };
 
@@ -272,9 +277,21 @@ const App: React.FC = () => {
   }, [mousePos]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <div style={{ padding: '10px', background: '#333', color: 'white', display: 'flex', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
+      <div style={{ padding: '10px', background: '#333', color: 'white', display: 'flex', gap: '10px', alignItems: 'center' }}>
         <strong>Euclidea Clone</strong>
+        <span style={{ fontSize: '0.9em', marginLeft: '20px', color: '#ccc' }}>
+          {level1.title} - {level1.description}
+        </span>
+        
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+          <button onClick={handleUndo} disabled={history.length <= 1}>Undo</button>
+          <button onClick={handleClear}>Clear</button>
+          <span style={{ margin: 'auto 0' }}>Scores: L={board.operationCountL} E={board.operationCountE}</span>
+        </div>
+      </div>
+      
+      <div style={{ padding: '10px', background: '#eee', borderBottom: '1px solid #ccc', display: 'flex', gap: '10px' }}>
         <button 
           onClick={() => selectTool("Point", new PointTool(SNAP_RADIUS))}
           style={{ background: toolName === "Point" ? '#ff5722' : '#fff' }}
@@ -299,14 +316,19 @@ const App: React.FC = () => {
         >
           Eraser
         </button>
-
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
-          <button onClick={handleUndo} disabled={history.length <= 1}>Undo</button>
-          <button onClick={handleClear}>Clear</button>
-          <span style={{ margin: 'auto 0' }}>Scores: L={board.operationCountL} E={board.operationCountE}</span>
-        </div>
       </div>
-      <div style={{ flex: 1, position: 'relative' }}>
+
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {isLevelComplete && (
+          <div style={{
+            position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(76, 175, 80, 0.9)', color: 'white', padding: '15px 30px',
+            borderRadius: '5px', fontSize: '24px', fontWeight: 'bold', zIndex: 10,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.3)', pointerEvents: 'none'
+          }}>
+            Level Complete!
+          </div>
+        )}
         <canvas
           ref={bgCanvasRef}
           width={window.innerWidth}
