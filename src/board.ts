@@ -32,6 +32,17 @@ export class Board {
     return newBoard;
   }
 
+  removeLine(target: Line): Board {
+    const lIndex = this.lines.findIndex(l => l.equals(target));
+    if (lIndex === -1) {
+      return this; // Line not found
+    }
+    const newBoard = this.clone();
+    newBoard.lines.splice(lIndex, 1);
+    // Note: derived geometry is not deleted yet
+    return newBoard;
+  }
+
   addLine(l: Line): Board {
     if (this.lines.some(existing => existing.isParallelTo(l) && Math.abs(existing.c - l.c) < 1e-9)) {
       return this; // Line already exists
@@ -45,6 +56,17 @@ export class Board {
     // Auto-calculate intersections with existing geometry
     newBoard = newBoard.calculateNewIntersectionsForLine(l);
     
+    return newBoard;
+  }
+
+  removeCircle(target: Circle): Board {
+    const cIndex = this.circles.findIndex(c => c.equals(target));
+    if (cIndex === -1) {
+      return this; // Circle not found
+    }
+    const newBoard = this.clone();
+    newBoard.circles.splice(cIndex, 1);
+    // Note: derived geometry is not deleted yet
     return newBoard;
   }
 
@@ -112,6 +134,36 @@ export class Board {
     }
     
     return closest;
+  }
+
+  getHitShape(target: Point, hitRadius: number): { type: 'point' | 'line' | 'circle', shape: any } | null {
+    // 1. Check points (highest priority for hitting)
+    const p = this.getSnapPoint(target, hitRadius);
+    if (p) {
+      return { type: 'point', shape: p };
+    }
+
+    // 2. Check lines
+    // Distance from point (x0, y0) to line Ax + By + C = 0 is |Ax0 + By0 + C| / sqrt(A^2 + B^2)
+    // Since lines are normalized in our implementation, A^2 + B^2 is approximately 1.
+    for (const line of this.lines) {
+      const d = Math.abs(line.a * target.x + line.b * target.y + line.c);
+      if (d <= hitRadius) {
+        return { type: 'line', shape: line };
+      }
+    }
+
+    // 3. Check circles
+    // Distance to circle boundary is |distance_to_center - radius|
+    for (const circle of this.circles) {
+      const dCenter = target.distanceTo(circle.center);
+      const dEdge = Math.abs(dCenter - circle.radius);
+      if (dEdge <= hitRadius) {
+        return { type: 'circle', shape: circle };
+      }
+    }
+
+    return null;
   }
 
   clone(): Board {

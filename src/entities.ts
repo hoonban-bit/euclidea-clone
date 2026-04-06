@@ -41,6 +41,16 @@ export class Line {
   isParallelTo(other: Line, tolerance = 1e-9): boolean {
     return Math.abs(this.a * other.b - this.b * other.a) < tolerance;
   }
+
+  equals(other: Line, tolerance = 1e-9): boolean {
+    // Due to normalization and consistent sign applied in fromPoints, 
+    // identical lines will have matching a, b, and c coefficients.
+    return (
+      Math.abs(this.a - other.a) < tolerance &&
+      Math.abs(this.b - other.b) < tolerance &&
+      Math.abs(this.c - other.c) < tolerance
+    );
+  }
 }
 
 export class Circle {
@@ -53,5 +63,12 @@ export class Circle {
   static fromCenterAndPoint(center: Point, edgePoint: Point): Circle {
     const r = center.distanceTo(edgePoint);
     return new Circle(center, r);
+  }
+
+  equals(other: Circle, tolerance = 1e-9): boolean {
+    return (
+      this.center.equals(other.center, tolerance) &&
+      Math.abs(this.radius - other.radius) < tolerance
+    );
   }
 }

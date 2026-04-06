@@ -10,10 +10,18 @@ export class EraserTool implements Tool {
   }
 
   onDown(rawPoint: Point, board: Board): Board {
-    const targetPoint = board.getSnapPoint(rawPoint, this.snapRadius);
-    if (targetPoint) {
-      return board.removePoint(targetPoint);
+    const hit = board.getHitShape(rawPoint, this.snapRadius);
+    
+    if (hit) {
+      if (hit.type === 'point') {
+        return board.removePoint(hit.shape);
+      } else if (hit.type === 'line') {
+        return board.removeLine(hit.shape);
+      } else if (hit.type === 'circle') {
+        return board.removeCircle(hit.shape);
+      }
     }
+    
     return board;
   }
 

@@ -20,6 +20,11 @@ const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<Tool>(new PointTool(SNAP_RADIUS));
   const [toolName, setToolName] = useState<string>("Point");
 
+  // Camera Pan
+  const [cameraOffset, setCameraOffset] = useState<Point>(new Point(0, 0));
+  const [isPanning, setIsPanning] = useState(false);
+  const lastPanPoint = useRef<Point | null>(null);
+
   // Keep track of the mouse position to continuously render the screen and snap indicator
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
@@ -69,10 +74,22 @@ const App: React.FC = () => {
     const canvas = fgCanvasRef.current;
     if (!canvas) return new Point(0, 0);
     const rect = canvas.getBoundingClientRect();
-    return new Point(e.clientX - rect.left, e.clientY - rect.top);
+    // Translate screen coordinate to world coordinate
+    return new Point(
+      e.clientX - rect.left - cameraOffset.x, 
+      e.clientY - rect.top - cameraOffset.y
+    );
   };
 
   const handlePointerDown = (e: MouseEvent<HTMLCanvasElement>) => {
+    // Right click (2) or middle click (1) for panning
+    if (e.button === 1 || e.button === 2) {
+      setIsPanning(true);
+      lastPanPoint.current = new Point(e.clientX, e.clientY);
+      return;
+    }
+
+    // Left click for tools
     const p = getCanvasPoint(e);
     const updatedBoard = activeTool.onDown(p, board);
     if (updatedBoard !== board) {
@@ -82,6 +99,15 @@ const App: React.FC = () => {
   };
 
   const handlePointerMove = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (isPanning && lastPanPoint.current) {
+      const dx = e.clientX - lastPanPoint.current.x;
+      const dy = e.clientY - lastPanPoint.current.y;
+      
+      setCameraOffset(prev => new Point(prev.x + dx, prev.y + dy));
+      lastPanPoint.current = new Point(e.clientX, e.clientY);
+      return;
+    }
+
     const p = getCanvasPoint(e);
     setMousePos(p);
     activeTool.onMove(p, board);
@@ -89,6 +115,12 @@ const App: React.FC = () => {
   };
 
   const handlePointerUp = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (isPanning) {
+      setIsPanning(false);
+      lastPanPoint.current = null;
+      return;
+    }
+
     const p = getCanvasPoint(e);
     const updatedBoard = activeTool.onUp(p, board);
     
@@ -105,25 +137,35 @@ const App: React.FC = () => {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(cameraOffset.x, cameraOffset.y);
 
     // Draw Lines
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
     board.lines.forEach(line => {
-      // Very basic drawing of an infinite line across the canvas
-      // Ax + By + C = 0
-      // If B is not 0: y = (-Ax - C) / B
-      // If A is not 0: x = (-By - C) / A
+      // We need to draw the line such that it covers the entire visible canvas area
+      // Calculate coordinates relative to the untranslated screen to ensure infinite span
       ctx.beginPath();
       if (Math.abs(line.b) > 1e-9) {
-        const y1 = (-line.a * 0 - line.c) / line.b;
-        const y2 = (-line.a * canvas.width - line.c) / line.b;
-        ctx.moveTo(0, y1);
-        ctx.lineTo(canvas.width, y2);
+        // Find x boundaries in world space corresponding to screen left/right
+        const startX = -cameraOffset.x;
+        const endX = canvas.width - cameraOffset.x;
+        
+        const y1 = (-line.a * startX - line.c) / line.b;
+        const y2 = (-line.a * endX - line.c) / line.b;
+        
+        ctx.moveTo(startX, y1);
+        ctx.lineTo(endX, y2);
       } else {
-        const x1 = (-line.b * 0 - line.c) / line.a;
-        ctx.moveTo(x1, 0);
-        ctx.lineTo(x1, canvas.height);
+        // Vertical line
+        const startY = -cameraOffset.y;
+        const endY = canvas.height - cameraOffset.y;
+        
+        const x1 = (-line.b * 0 - line.c) / line.a; // or just -c/a
+        
+        ctx.moveTo(x1, startY);
+        ctx.lineTo(x1, endY);
       }
       ctx.stroke();
     });
@@ -143,6 +185,8 @@ const App: React.FC = () => {
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
       ctx.fill();
     });
+    
+    ctx.restore();
   };
 
   const renderForeground = () => {
@@ -152,6 +196,8 @@ const App: React.FC = () => {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(cameraOffset.x, cameraOffset.y);
 
     // Draw Drafts for Line and Circle Tools
     if (activeTool.startPoint && activeTool.currentDraftPoint) {
@@ -171,24 +217,54 @@ const App: React.FC = () => {
       ctx.setLineDash([]);
     }
 
-    // Draw Snapping Indicator
+    // Draw Snapping/Hit Indicator
     if (mousePos) {
-      const snapped = board.getSnapPoint(mousePos, SNAP_RADIUS);
-      if (snapped) {
+      const hit = board.getHitShape(mousePos, SNAP_RADIUS);
+      
+      // We only highlight points right now to match Euclidea style, 
+      // but you could add styling for highlighting lines/circles on hover here.
+      if (hit && hit.type === 'point') {
+        const p = hit.shape as Point;
         ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(snapped.x, snapped.y, SNAP_RADIUS, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, SNAP_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (activeTool instanceof EraserTool && hit) {
+        // Optionally highlight lines/circles in red if Eraser is active
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        if (hit.type === 'line') {
+          const l = hit.shape;
+          if (Math.abs(l.b) > 1e-9) {
+            const startX = -cameraOffset.x;
+            const endX = canvas.width - cameraOffset.x;
+            ctx.moveTo(startX, (-l.a * startX - l.c) / l.b);
+            ctx.lineTo(endX, (-l.a * endX - l.c) / l.b);
+          } else {
+            const startY = -cameraOffset.y;
+            const endY = canvas.height - cameraOffset.y;
+            ctx.moveTo(-l.c / l.a, startY);
+            ctx.lineTo(-l.c / l.a, endY);
+          }
+        } else if (hit.type === 'circle') {
+          const c = hit.shape;
+          ctx.arc(c.center.x, c.center.y, c.radius, 0, Math.PI * 2);
+        }
         ctx.stroke();
       }
     }
+    
+    ctx.restore();
   };
 
-  // Re-render background when board history changes (e.g. Undo/Clear)
+  // Re-render background when board history or camera changes
   useEffect(() => {
     renderBackground();
     renderForeground();
-  }, [board]);
+  }, [board, cameraOffset]);
 
   // Re-render foreground whenever mousePos changes so we can see the snapping halo follow the mouse
   useEffect(() => {
@@ -245,7 +321,8 @@ const App: React.FC = () => {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp} // End drag if cursor leaves canvas
-          style={{ position: 'absolute', top: 0, left: 0, display: 'block', cursor: 'crosshair' }}
+          onContextMenu={(e) => e.preventDefault()} // Prevent context menu on right click
+          style={{ position: 'absolute', top: 0, left: 0, display: 'block', cursor: isPanning ? 'grabbing' : 'crosshair' }}
         />
       </div>
     </div>
