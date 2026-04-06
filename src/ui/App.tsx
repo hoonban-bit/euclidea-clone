@@ -176,8 +176,8 @@ const App: React.FC = () => {
     });
 
     // Draw Circles
-    ctx.strokeStyle = '#333';
     board.circles.forEach(circle => {
+      ctx.strokeStyle = circle.isGiven ? '#888' : '#333';
       ctx.beginPath();
       ctx.arc(circle.center.x, circle.center.y, circle.radius, 0, Math.PI * 2);
       ctx.stroke();
@@ -185,9 +185,9 @@ const App: React.FC = () => {
 
     // Draw Points
     board.points.forEach(p => {
-      ctx.fillStyle = '#ff5722';
+      ctx.fillStyle = p.isGiven ? '#555' : '#ff5722';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.isGiven ? 5 : 4, 0, Math.PI * 2);
       ctx.fill();
     });
     
@@ -224,7 +224,8 @@ const App: React.FC = () => {
 
     // Draw Snapping/Hit Indicator
     if (mousePos) {
-      const hit = board.getHitShape(mousePos, SNAP_RADIUS);
+      // Exclude given geometry from hit detection when Eraser Tool is active
+      const hit = board.getHitShape(mousePos, SNAP_RADIUS, activeTool instanceof EraserTool);
       
       // We only highlight points right now to match Euclidea style, 
       // but you could add styling for highlighting lines/circles on hover here.

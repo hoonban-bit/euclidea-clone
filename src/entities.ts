@@ -1,5 +1,5 @@
 export class Point {
-  constructor(public x: number, public y: number) {}
+  constructor(public x: number, public y: number, public isGiven: boolean = false) {}
 
   equals(other: Point, tolerance = 1e-9): boolean {
     return (
@@ -17,9 +17,9 @@ export class Point {
 
 export class Line {
   // A line defined by the standard form equation: Ax + By + C = 0
-  constructor(public a: number, public b: number, public c: number) {}
+  constructor(public a: number, public b: number, public c: number, public isGiven: boolean = false) {}
 
-  static fromPoints(p1: Point, p2: Point): Line {
+  static fromPoints(p1: Point, p2: Point, isGiven: boolean = false): Line {
     // a = y1 - y2
     // b = x2 - x1
     // c = x1*y2 - x2*y1
@@ -35,7 +35,7 @@ export class Line {
     
     // Consistent sign
     const sign = (a < 0 || (a === 0 && b < 0)) ? -1 : 1;
-    return new Line((a / norm) * sign, (b / norm) * sign, (c / norm) * sign);
+    return new Line((a / norm) * sign, (b / norm) * sign, (c / norm) * sign, isGiven);
   }
 
   isParallelTo(other: Line, tolerance = 1e-9): boolean {
@@ -54,15 +54,15 @@ export class Line {
 }
 
 export class Circle {
-  constructor(public center: Point, public radius: number) {
+  constructor(public center: Point, public radius: number, public isGiven: boolean = false) {
     if (radius <= 0) {
       throw new Error("Radius must be greater than zero.");
     }
   }
 
-  static fromCenterAndPoint(center: Point, edgePoint: Point): Circle {
+  static fromCenterAndPoint(center: Point, edgePoint: Point, isGiven: boolean = false): Circle {
     const r = center.distanceTo(edgePoint);
-    return new Circle(center, r);
+    return new Circle(center, r, isGiven);
   }
 
   equals(other: Circle, tolerance = 1e-9): boolean {

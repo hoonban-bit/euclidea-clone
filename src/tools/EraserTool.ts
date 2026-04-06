@@ -10,7 +10,8 @@ export class EraserTool implements Tool {
   }
 
   onDown(rawPoint: Point, board: Board): Board {
-    const hit = board.getHitShape(rawPoint, this.snapRadius);
+    // Pass true to exclude given geometry from deletion
+    const hit = board.getHitShape(rawPoint, this.snapRadius, true);
     
     if (hit) {
       if (hit.type === 'point') {

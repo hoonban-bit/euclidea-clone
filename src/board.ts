@@ -136,17 +136,29 @@ export class Board {
     return closest;
   }
 
-  getHitShape(target: Point, hitRadius: number): { type: 'point' | 'line' | 'circle', shape: any } | null {
+  getHitShape(target: Point, hitRadius: number, excludeGiven: boolean = false): { type: 'point' | 'line' | 'circle', shape: any } | null {
     // 1. Check points (highest priority for hitting)
-    const p = this.getSnapPoint(target, hitRadius);
-    if (p) {
-      return { type: 'point', shape: p };
+    let closestPoint: Point | null = null;
+    let minDist = Infinity;
+
+    for (const p of this.points) {
+      if (excludeGiven && p.isGiven) continue;
+      const d = p.distanceTo(target);
+      if (d <= hitRadius && d < minDist) {
+        closestPoint = p;
+        minDist = d;
+      }
+    }
+
+    if (closestPoint) {
+      return { type: 'point', shape: closestPoint };
     }
 
     // 2. Check lines
     // Distance from point (x0, y0) to line Ax + By + C = 0 is |Ax0 + By0 + C| / sqrt(A^2 + B^2)
     // Since lines are normalized in our implementation, A^2 + B^2 is approximately 1.
     for (const line of this.lines) {
+      if (excludeGiven && line.isGiven) continue;
       const d = Math.abs(line.a * target.x + line.b * target.y + line.c);
       if (d <= hitRadius) {
         return { type: 'line', shape: line };
@@ -156,6 +168,7 @@ export class Board {
     // 3. Check circles
     // Distance to circle boundary is |distance_to_center - radius|
     for (const circle of this.circles) {
+      if (excludeGiven && circle.isGiven) continue;
       const dCenter = target.distanceTo(circle.center);
       const dEdge = Math.abs(dCenter - circle.radius);
       if (dEdge <= hitRadius) {
