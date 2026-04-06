@@ -1,6 +1,7 @@
 import { Level } from "./Level";
 import { Board } from "../board";
 import { Point, Line } from "../entities";
+import { LevelVerifier } from "./LevelVerifier";
 
 export const level1: Level = {
   id: "level_1",
@@ -21,42 +22,26 @@ export const level1: Level = {
   },
 
   isComplete: (board: Board) => {
-    // The initial points
     const p1 = new Point(300, 300);
     const p2 = new Point(500, 300);
-
     const targetDistance = p1.distanceTo(p2);
-    const tolerance = 1e-4;
+    const verifier = new LevelVerifier(board);
 
+    // 1. Find all potential vertices (points that are exactly targetDistance away from both p1 and p2)
+    // We can do this by getting all points at targetDistance from p1, and checking which are also at targetDistance from p2.
+    const candidates = verifier.getPointsAtDistance(p1, targetDistance);
+    
     // There are two valid third vertices (above and below the base). 
     // The user just needs to connect lines to ONE of them.
-    for (const point of board.points) {
-      const d1 = point.distanceTo(p1);
-      const d2 = point.distanceTo(p2);
-
-      // Is this point a valid third vertex?
-      if (Math.abs(d1 - targetDistance) < tolerance && 
-          Math.abs(d2 - targetDistance) < tolerance) {
-        
-        let hasLine1 = false;
-        let hasLine2 = false;
-
-        for (const line of board.lines) {
-          const dToTarget = Math.abs(line.a * point.x + line.b * point.y + line.c);
-          
-          const dToP1 = Math.abs(line.a * p1.x + line.b * p1.y + line.c);
-          if (dToTarget < tolerance && dToP1 < tolerance) {
-            hasLine1 = true;
-          }
-
-          const dToP2 = Math.abs(line.a * p2.x + line.b * p2.y + line.c);
-          if (dToTarget < tolerance && dToP2 < tolerance) {
-            hasLine2 = true;
-          }
-        }
+    for (const candidate of candidates) {
+      if (Math.abs(candidate.distanceTo(p2) - targetDistance) < 1e-4) {
+        // We found a geometrically valid equilateral vertex.
+        // Now, did the user actually draw the lines to connect it to the base?
+        const hasLine1 = verifier.hasLineConnecting(candidate, p1);
+        const hasLine2 = verifier.hasLineConnecting(candidate, p2);
 
         if (hasLine1 && hasLine2) {
-          return true; // Found a valid vertex with both lines connected!
+          return true;
         }
       }
     }

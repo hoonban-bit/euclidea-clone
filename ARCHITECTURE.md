@@ -21,8 +21,8 @@ context (like Canvas or WebGL). It is a pure mathematical and logical engine.
   and angles.
 - **State Management:** Maintaining the list of objects currently on the
   mathematical "board".
-- **Verification Engine:** Checking if a given set of constructed shapes meets
-  the mathematical requirements of a level's objective.
+- **Verification Engine / LevelVerifier:** Checking if a given set of constructed shapes meets
+  the mathematical requirements of a level's objective. This includes semantic helpers (e.g., `hasLineConnecting(p1, p2)`) to ensure levels are scalable and easy to define without writing raw mathematical formulas for every new level.
 - **Scoring:** Calculating the L-score (Lines/Circles count) and E-score
   (Elementary constructions count).
 
