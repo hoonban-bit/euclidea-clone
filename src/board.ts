@@ -20,27 +20,11 @@ export class Board {
   }
 
   removePoint(target: Point): Board {
-    const pIndex = this.points.findIndex(p => p.equals(target));
-    if (pIndex === -1) {
-      return this; // Point not found
-    }
-    const newBoard = this.clone();
-    newBoard.points.splice(pIndex, 1);
-    
-    // We are deliberately keeping this simple. Real Euclidea deletes all derived geometry 
-    // when a parent is deleted. For now, we only delete the specific point.
-    return newBoard;
+    return this.removeEntityById(target.id);
   }
 
   removeLine(target: Line): Board {
-    const lIndex = this.lines.findIndex(l => l.equals(target));
-    if (lIndex === -1) {
-      return this; // Line not found
-    }
-    const newBoard = this.clone();
-    newBoard.lines.splice(lIndex, 1);
-    // Note: derived geometry is not deleted yet
-    return newBoard;
+    return this.removeEntityById(target.id);
   }
 
   addLine(l: Line): Board {
@@ -60,14 +44,52 @@ export class Board {
   }
 
   removeCircle(target: Circle): Board {
-    const cIndex = this.circles.findIndex(c => c.equals(target));
-    if (cIndex === -1) {
-      return this; // Circle not found
-    }
+    return this.removeEntityById(target.id);
+  }
+
+  /**
+   * Recursively removes an entity and any entities that geometrically depend on it.
+   */
+  private removeEntityById(id: string): Board {
     const newBoard = this.clone();
-    newBoard.circles.splice(cIndex, 1);
-    // Note: derived geometry is not deleted yet
-    return newBoard;
+    let removedAny = false;
+
+    // Filter out the target entity from all arrays
+    const originalPointsLen = newBoard.points.length;
+    newBoard.points = newBoard.points.filter(p => p.id !== id);
+    if (newBoard.points.length < originalPointsLen) removedAny = true;
+
+    const originalLinesLen = newBoard.lines.length;
+    newBoard.lines = newBoard.lines.filter(l => l.id !== id);
+    if (newBoard.lines.length < originalLinesLen) removedAny = true;
+
+    const originalCirclesLen = newBoard.circles.length;
+    newBoard.circles = newBoard.circles.filter(c => c.id !== id);
+    if (newBoard.circles.length < originalCirclesLen) removedAny = true;
+
+    if (!removedAny) return this;
+
+    // Now, scan the board for any child entities that depended on the removed ID
+    // and recursively remove them as well.
+    let currentBoard: Board = newBoard;
+
+    for (const p of currentBoard.points) {
+      if (p.parents.includes(id)) {
+        currentBoard = currentBoard.removeEntityById(p.id);
+      }
+    }
+    for (const l of currentBoard.lines) {
+      if (l.parents.includes(id)) {
+        currentBoard = currentBoard.removeEntityById(l.id);
+      }
+    }
+    for (const c of currentBoard.circles) {
+      if (c.parents.includes(id)) {
+        currentBoard = currentBoard.removeEntityById(c.id);
+      }
+    }
+
+    return currentBoard;
   }
 
   addCircle(c: Circle): Board {
@@ -90,12 +112,16 @@ export class Board {
     for (const existingLine of this.lines) {
       if (existingLine === newLine) continue;
       const pt = getLineLineIntersection(newLine, existingLine);
-      if (pt) currentBoard = currentBoard.addPoint(pt);
+      if (pt) {
+        pt.parents = [newLine.id, existingLine.id];
+        currentBoard = currentBoard.addPoint(pt);
+      }
     }
 
     for (const existingCircle of this.circles) {
       const pts = getLineCircleIntersection(newLine, existingCircle);
       for (const pt of pts) {
+        pt.parents = [newLine.id, existingCircle.id];
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -107,6 +133,7 @@ export class Board {
     for (const existingLine of this.lines) {
       const pts = getLineCircleIntersection(existingLine, newCircle);
       for (const pt of pts) {
+        pt.parents = [newCircle.id, existingLine.id];
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -115,6 +142,7 @@ export class Board {
       if (existingCircle === newCircle) continue;
       const pts = getCircleCircleIntersection(newCircle, existingCircle);
       for (const pt of pts) {
+        pt.parents = [newCircle.id, existingCircle.id];
         currentBoard = currentBoard.addPoint(pt);
       }
     }

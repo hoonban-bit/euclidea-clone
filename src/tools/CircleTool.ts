@@ -36,6 +36,7 @@ export class CircleTool implements Tool {
     // A circle requires two distinct points (radius > 0)
     if (!this.startPoint.equals(endPoint)) {
       currentBoard = currentBoard.addPoint(endPoint);
+      // `Circle.fromCenterAndPoint` automatically handles setting parents to [startPoint.id, endPoint.id]
       const newCircle = Circle.fromCenterAndPoint(this.startPoint, endPoint);
       currentBoard = currentBoard.addCircle(newCircle);
     }

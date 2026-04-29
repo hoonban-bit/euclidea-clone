@@ -35,7 +35,10 @@ export class LineTool implements Tool {
 
     // A line requires two distinct points
     if (!this.startPoint.equals(endPoint)) {
+      // Ensure the endpoints actually exist on the board so they have finalized IDs
       currentBoard = currentBoard.addPoint(endPoint);
+      
+      // `Line.fromPoints` handles setting `parents: [startPoint.id, endPoint.id]`
       const newLine = Line.fromPoints(this.startPoint, endPoint);
       currentBoard = currentBoard.addLine(newLine);
     }

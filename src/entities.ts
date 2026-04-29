@@ -1,5 +1,17 @@
+// Simple counter for IDs to avoid external dependencies like 'uuid' which cause Jest configuration issues with ES Modules.
+let nextId = 1;
+function generateId(): string {
+  return `entity_${nextId++}`;
+}
+
 export class Point {
-  constructor(public x: number, public y: number, public isGiven: boolean = false) {}
+  public id: string;
+  public parents: string[];
+
+  constructor(public x: number, public y: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
+    this.id = id || generateId();
+    this.parents = parents;
+  }
 
   equals(other: Point, tolerance = 1e-9): boolean {
     return (
@@ -16,8 +28,14 @@ export class Point {
 }
 
 export class Line {
+  public id: string;
+  public parents: string[];
+
   // A line defined by the standard form equation: Ax + By + C = 0
-  constructor(public a: number, public b: number, public c: number, public isGiven: boolean = false) {}
+  constructor(public a: number, public b: number, public c: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
+    this.id = id || generateId();
+    this.parents = parents;
+  }
 
   static fromPoints(p1: Point, p2: Point, isGiven: boolean = false): Line {
     // a = y1 - y2
@@ -35,7 +53,8 @@ export class Line {
     
     // Consistent sign
     const sign = (a < 0 || (a === 0 && b < 0)) ? -1 : 1;
-    return new Line((a / norm) * sign, (b / norm) * sign, (c / norm) * sign, isGiven);
+    // A line drawn between two points depends on those two points
+    return new Line((a / norm) * sign, (b / norm) * sign, (c / norm) * sign, isGiven, undefined, [p1.id, p2.id]);
   }
 
   isParallelTo(other: Line, tolerance = 1e-9): boolean {
@@ -54,15 +73,21 @@ export class Line {
 }
 
 export class Circle {
-  constructor(public center: Point, public radius: number, public isGiven: boolean = false) {
+  public id: string;
+  public parents: string[];
+
+  constructor(public center: Point, public radius: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
     if (radius <= 0) {
       throw new Error("Radius must be greater than zero.");
     }
+    this.id = id || generateId();
+    this.parents = parents;
   }
 
   static fromCenterAndPoint(center: Point, edgePoint: Point, isGiven: boolean = false): Circle {
     const r = center.distanceTo(edgePoint);
-    return new Circle(center, r, isGiven);
+    // A circle depends on its center point and the edge point used to define its radius
+    return new Circle(center, r, isGiven, undefined, [center.id, edgePoint.id]);
   }
 
   equals(other: Circle, tolerance = 1e-9): boolean {
