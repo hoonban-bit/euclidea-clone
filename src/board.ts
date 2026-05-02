@@ -89,6 +89,19 @@ export class Board {
       }
     }
 
+    // Finally, perform an Orphan Cleanup.
+    // If a manually drawn shape is deleted, its structural starting points (which have no parents themselves) 
+    // might be left behind as clutter. If a point is not 'given', has no parents, and is no longer 
+    // referenced by ANY existing line or circle, we remove it.
+    currentBoard.points = currentBoard.points.filter(p => {
+      if (p.isGiven || p.parents.length > 0) return true; // Keep given points and auto-intersections
+
+      const isUsedByLine = currentBoard.lines.some(l => l.parents.includes(p.id));
+      const isUsedByCircle = currentBoard.circles.some(c => c.parents.includes(p.id));
+      
+      return isUsedByLine || isUsedByCircle;
+    });
+
     return currentBoard;
   }
 
