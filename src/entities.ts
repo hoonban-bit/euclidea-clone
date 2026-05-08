@@ -7,10 +7,15 @@ function generateId(): string {
 export class Point {
   public id: string;
   public parents: string[];
+  public label?: string;
+  public isIntersection?: boolean = false;
+  public creationIndex: number;
 
-  constructor(public x: number, public y: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
+  constructor(public x: number, public y: number, public isGiven: boolean = false, id?: string, parents: string[] = [], label?: string) {
     this.id = id || generateId();
     this.parents = parents;
+    this.label = label;
+    this.creationIndex = nextId;
   }
 
   equals(other: Point, tolerance = 1e-9): boolean {
@@ -30,11 +35,15 @@ export class Point {
 export class Line {
   public id: string;
   public parents: string[];
+  public label?: string;
+  public creationIndex: number;
 
   // A line defined by the standard form equation: Ax + By + C = 0
-  constructor(public a: number, public b: number, public c: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
+  constructor(public a: number, public b: number, public c: number, public isGiven: boolean = false, id?: string, parents: string[] = [], label?: string) {
     this.id = id || generateId();
     this.parents = parents;
+    this.label = label;
+    this.creationIndex = nextId;
   }
 
   static fromPoints(p1: Point, p2: Point, isGiven: boolean = false): Line {
@@ -75,13 +84,17 @@ export class Line {
 export class Circle {
   public id: string;
   public parents: string[];
+  public label?: string;
+  public creationIndex: number;
 
-  constructor(public center: Point, public radius: number, public isGiven: boolean = false, id?: string, parents: string[] = []) {
+  constructor(public center: Point, public radius: number, public isGiven: boolean = false, id?: string, parents: string[] = [], label?: string) {
     if (radius <= 0) {
       throw new Error("Radius must be greater than zero.");
     }
     this.id = id || generateId();
     this.parents = parents;
+    this.label = label;
+    this.creationIndex = nextId;
   }
 
   static fromCenterAndPoint(center: Point, edgePoint: Point, isGiven: boolean = false): Circle {

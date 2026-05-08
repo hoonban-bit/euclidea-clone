@@ -3,7 +3,6 @@ import { Board } from '../board';
 import { PointTool } from '../tools/PointTool';
 import { LineTool } from '../tools/LineTool';
 import { CircleTool } from '../tools/CircleTool';
-import { EraserTool } from '../tools/EraserTool';
 import { Point } from '../entities';
 import { Tool } from '../tools/Tool';
 import { level1 } from '../levels/level1';
@@ -14,8 +13,9 @@ const App: React.FC = () => {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   
-  // Undo History
+  // Undo/Redo History
   const [history, setHistory] = useState<Board[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
   const [board, setBoard] = useState(() => level1.getInitialBoard());
   const [isLevelComplete, setIsLevelComplete] = useState(false);
   
@@ -27,6 +27,9 @@ const App: React.FC = () => {
   const [isPanning, setIsPanning] = useState(false);
   const lastPanPoint = useRef<Point | null>(null);
 
+  // Dragging dynamic points
+  const [draggedPoint, setDraggedPoint] = useState<Point | null>(null);
+
   // Keep track of the mouse position to continuously render the screen and snap indicator
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
@@ -34,6 +37,7 @@ const App: React.FC = () => {
     const initialBoard = level1.getInitialBoard();
     setBoard(initialBoard);
     setHistory([initialBoard.clone()]);
+    setHistoryIndex(0);
   }, []);
 
   const selectTool = (name: string, tool: Tool) => {
@@ -43,19 +47,30 @@ const App: React.FC = () => {
     renderForeground();
   };
 
-  const saveHistory = () => {
-    setHistory(prev => [...prev, board.clone()]);
+  const saveHistory = (newBoard: Board) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newBoard.clone());
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
   };
 
   const handleUndo = () => {
-    if (history.length > 1) {
-      const newHistory = [...history];
-      newHistory.pop(); // Remove current state
-      const previousState = newHistory[newHistory.length - 1];
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const previousState = history[newIndex];
       setBoard(previousState.clone());
-      setHistory(newHistory);
-      // We must reset the active tool to prevent draft artifacts
+      setHistoryIndex(newIndex);
       activeTool.reset(); 
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const nextState = history[newIndex];
+      setBoard(nextState.clone());
+      setHistoryIndex(newIndex);
+      activeTool.reset();
     }
   };
 
@@ -64,6 +79,7 @@ const App: React.FC = () => {
     
     setBoard(newBoard);
     setHistory([newBoard.clone()]);
+    setHistoryIndex(0);
     setIsLevelComplete(false);
     activeTool.reset();
   };
@@ -87,12 +103,24 @@ const App: React.FC = () => {
       return;
     }
 
-    // Left click for tools
     const p = getCanvasPoint(e);
+
+    // Check if clicking on an existing free point to drag it
+    const hit = board.getHitShape(p, SNAP_RADIUS, false);
+    if (hit && hit.type === 'point' && toolName === 'Point') { // Only drag in point tool mode to avoid interfering with drawing
+      const pt = hit.shape as Point;
+      // Allow dragging given points or free points (parents.length === 0)
+      if (pt.parents.length === 0 || pt.isGiven) {
+        setDraggedPoint(pt);
+        return;
+      }
+    }
+
+    // Left click for tools
     const updatedBoard = activeTool.onDown(p, board);
     if (updatedBoard !== board) {
       setBoard(updatedBoard);
-      setHistory(prev => [...prev, updatedBoard.clone()]);
+      saveHistory(updatedBoard);
     }
   };
 
@@ -108,11 +136,29 @@ const App: React.FC = () => {
 
     const p = getCanvasPoint(e);
     setMousePos(p);
+
+    if (draggedPoint) {
+      draggedPoint.x = p.x;
+      draggedPoint.y = p.y;
+      board.updateGeometry();
+      // Force a re-render by creating a new reference, but don't save to history to avoid flooding it
+      setBoard(Object.assign(new Board(), board));
+      return;
+    }
+
     activeTool.onMove(p, board);
     renderForeground();
   };
 
+  const [newIntersectionsTooltip, setNewIntersectionsTooltip] = useState<{points: Point[], time: number} | null>(null);
+
   const handlePointerUp = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (draggedPoint) {
+      setDraggedPoint(null);
+      // We don't save history on drag drop to avoid changing the logical state steps
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       lastPanPoint.current = null;
@@ -125,8 +171,21 @@ const App: React.FC = () => {
     const updatedBoard = activeTool.onUp(p, board);
     
     if (updatedBoard !== board) {
+      // Find new intersections created by this action to display tooltips
+      const newIntersections = updatedBoard.points.filter(pt => pt.isIntersection && !board.points.some(oldPt => oldPt.id === pt.id));
+      if (newIntersections.length > 0) {
+        setNewIntersectionsTooltip({ points: newIntersections, time: Date.now() });
+        // Clear tooltip after 2 seconds
+        setTimeout(() => {
+          setNewIntersectionsTooltip(prev => {
+            if (prev && Date.now() - prev.time >= 2000) return null;
+            return prev;
+          });
+        }, 2000);
+      }
+
       setBoard(updatedBoard);
-      setHistory(prev => [...prev, updatedBoard.clone()]);
+      saveHistory(updatedBoard);
       
       // Verify level completion
       if (level1.isComplete(updatedBoard)) {
@@ -148,10 +207,12 @@ const App: React.FC = () => {
     // Draw Lines
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
+    ctx.font = '14px Arial';
     board.lines.forEach(line => {
       // We need to draw the line such that it covers the entire visible canvas area
       // Calculate coordinates relative to the untranslated screen to ensure infinite span
       ctx.beginPath();
+      let labelX, labelY;
       if (Math.abs(line.b) > 1e-9) {
         // Find x boundaries in world space corresponding to screen left/right
         const startX = -cameraOffset.x;
@@ -162,6 +223,9 @@ const App: React.FC = () => {
         
         ctx.moveTo(startX, y1);
         ctx.lineTo(endX, y2);
+
+        labelX = endX - 50;
+        labelY = (-line.a * labelX - line.c) / line.b - 10;
       } else {
         // Vertical line
         const startY = -cameraOffset.y;
@@ -171,8 +235,15 @@ const App: React.FC = () => {
         
         ctx.moveTo(x1, startY);
         ctx.lineTo(x1, endY);
+
+        labelX = x1 + 10;
+        labelY = endY - 50;
       }
       ctx.stroke();
+      if (line.label) {
+        ctx.fillStyle = '#333';
+        ctx.fillText(line.label, labelX, labelY);
+      }
     });
 
     // Draw Circles
@@ -181,14 +252,27 @@ const App: React.FC = () => {
       ctx.beginPath();
       ctx.arc(circle.center.x, circle.center.y, circle.radius, 0, Math.PI * 2);
       ctx.stroke();
+      if (circle.label) {
+        ctx.fillStyle = circle.isGiven ? '#888' : '#333';
+        // Position label at roughly 45 degrees
+        const labelX = circle.center.x + circle.radius * Math.cos(Math.PI / 4) + 10;
+        const labelY = circle.center.y + circle.radius * Math.sin(Math.PI / 4) + 10;
+        ctx.fillText(circle.label, labelX, labelY);
+      }
     });
 
     // Draw Points
     board.points.forEach(p => {
+      // Do not draw pure auto-intersections as persistent dots unless explicitly forced
+      if (p.isIntersection) return;
+
       ctx.fillStyle = p.isGiven ? '#555' : '#ff5722';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.isGiven ? 5 : 4, 0, Math.PI * 2);
       ctx.fill();
+      if (p.label) {
+        ctx.fillText(p.label, p.x + 8, p.y - 8);
+      }
     });
     
     ctx.restore();
@@ -222,10 +306,23 @@ const App: React.FC = () => {
       ctx.setLineDash([]);
     }
 
+    // Draw Tooltips for new intersections
+    if (newIntersectionsTooltip) {
+      newIntersectionsTooltip.points.forEach(pt => {
+        // Draw a small temporary dot
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#333';
+        ctx.fillText("Intersection", pt.x + 8, pt.y - 8);
+      });
+    }
+
     // Draw Snapping/Hit Indicator
     if (mousePos) {
-      // Exclude given geometry from hit detection when Eraser Tool is active
-      const hit = board.getHitShape(mousePos, SNAP_RADIUS, activeTool instanceof EraserTool);
+      const hit = board.getHitShape(mousePos, SNAP_RADIUS, false);
       
       // We only highlight points right now to match Euclidea style, 
       // but you could add styling for highlighting lines/circles on hover here.
@@ -235,30 +332,6 @@ const App: React.FC = () => {
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(p.x, p.y, SNAP_RADIUS, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (activeTool instanceof EraserTool && hit) {
-        // Optionally highlight lines/circles in red if Eraser is active
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        
-        if (hit.type === 'line') {
-          const l = hit.shape;
-          if (Math.abs(l.b) > 1e-9) {
-            const startX = -cameraOffset.x;
-            const endX = canvas.width - cameraOffset.x;
-            ctx.moveTo(startX, (-l.a * startX - l.c) / l.b);
-            ctx.lineTo(endX, (-l.a * endX - l.c) / l.b);
-          } else {
-            const startY = -cameraOffset.y;
-            const endY = canvas.height - cameraOffset.y;
-            ctx.moveTo(-l.c / l.a, startY);
-            ctx.lineTo(-l.c / l.a, endY);
-          }
-        } else if (hit.type === 'circle') {
-          const c = hit.shape;
-          ctx.arc(c.center.x, c.center.y, c.radius, 0, Math.PI * 2);
-        }
         ctx.stroke();
       }
     }
@@ -286,7 +359,8 @@ const App: React.FC = () => {
         </span>
         
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
-          <button onClick={handleUndo} disabled={history.length <= 1}>Undo</button>
+          <button onClick={handleUndo} disabled={historyIndex <= 0}>Undo</button>
+          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1}>Redo</button>
           <button onClick={handleClear}>Clear</button>
           <span style={{ margin: 'auto 0' }}>Scores: L={board.operationCountL} E={board.operationCountE}</span>
         </div>
@@ -310,12 +384,6 @@ const App: React.FC = () => {
           style={{ background: toolName === "Circle" ? '#ff5722' : '#fff' }}
         >
           Circle Tool
-        </button>
-        <button 
-          onClick={() => selectTool("Eraser", new EraserTool(SNAP_RADIUS))}
-          style={{ background: toolName === "Eraser" ? '#ff5722' : '#fff' }}
-        >
-          Eraser
         </button>
       </div>
 
