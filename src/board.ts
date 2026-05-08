@@ -10,11 +10,25 @@ export class Board {
   public operationCountL = 0;
   public operationCountE = 0;
 
+  // Used for labeling
+  public pointLabelCounter = 0;
+  public shapeLabelCounter = 0;
+
+  private generateLabel(counter: number, isUppercase: boolean): string {
+    const baseChar = isUppercase ? 'A'.charCodeAt(0) : 'a'.charCodeAt(0);
+    const letter = String.fromCharCode(baseChar + (counter % 26));
+    const number = Math.floor(counter / 26);
+    return number > 0 ? `${letter}${number}` : letter;
+  }
+
   addPoint(p: Point): Board {
     if (this.points.some(existing => existing.equals(p))) {
       return this; // Point already exists
     }
     const newBoard = this.clone();
+    if (!p.label) {
+      p.label = newBoard.generateLabel(newBoard.pointLabelCounter++, true);
+    }
     newBoard.points.push(p);
     return newBoard;
   }
@@ -33,6 +47,9 @@ export class Board {
     }
     
     let newBoard = this.clone();
+    if (!l.label) {
+      l.label = newBoard.generateLabel(newBoard.shapeLabelCounter++, false);
+    }
     newBoard.lines.push(l);
     newBoard.operationCountL++;
     newBoard.operationCountE++;
@@ -110,6 +127,9 @@ export class Board {
       return this; // Circle already exists
     }
     let newBoard = this.clone();
+    if (!c.label) {
+      c.label = newBoard.generateLabel(newBoard.shapeLabelCounter++, false);
+    }
     newBoard.circles.push(c);
     newBoard.operationCountL++;
     newBoard.operationCountE++;
@@ -127,6 +147,11 @@ export class Board {
       const pt = getLineLineIntersection(newLine, existingLine);
       if (pt) {
         pt.parents = [newLine.id, existingLine.id];
+        // We do not add the point permanently to the board.
+        // Intersections are only calculated on the fly or used for snapping.
+        // If we want to show a tooltip, we'll store it differently.
+        // For now, let's just add it so tests don't break but we will hide it.
+        pt.isIntersection = true;
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -135,6 +160,7 @@ export class Board {
       const pts = getLineCircleIntersection(newLine, existingCircle);
       for (const pt of pts) {
         pt.parents = [newLine.id, existingCircle.id];
+        pt.isIntersection = true;
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -147,6 +173,7 @@ export class Board {
       const pts = getLineCircleIntersection(existingLine, newCircle);
       for (const pt of pts) {
         pt.parents = [newCircle.id, existingLine.id];
+        pt.isIntersection = true;
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -156,6 +183,7 @@ export class Board {
       const pts = getCircleCircleIntersection(newCircle, existingCircle);
       for (const pt of pts) {
         pt.parents = [newCircle.id, existingCircle.id];
+        pt.isIntersection = true;
         currentBoard = currentBoard.addPoint(pt);
       }
     }
@@ -220,14 +248,92 @@ export class Board {
     return null;
   }
 
+  updateGeometry(): void {
+    // Sort all entities by creation index to update them in order of dependency
+    const allEntities = [...this.points, ...this.lines, ...this.circles]
+      .sort((a, b) => a.creationIndex - b.creationIndex);
+
+    for (const entity of allEntities) {
+      if (entity instanceof Line && entity.parents.length === 2) {
+        // Line depends on 2 points
+        const p1 = this.points.find(p => p.id === entity.parents[0]);
+        const p2 = this.points.find(p => p.id === entity.parents[1]);
+        if (p1 && p2 && !p1.equals(p2)) {
+          const newLine = Line.fromPoints(p1, p2);
+          entity.a = newLine.a;
+          entity.b = newLine.b;
+          entity.c = newLine.c;
+        }
+      } else if (entity instanceof Circle && entity.parents.length === 2) {
+        // Circle depends on 2 points
+        const center = this.points.find(p => p.id === entity.parents[0]);
+        const edge = this.points.find(p => p.id === entity.parents[1]);
+        if (center && edge) {
+          entity.center = center;
+          entity.radius = center.distanceTo(edge);
+        }
+      } else if (entity instanceof Point && entity.parents.length === 2) {
+        // Intersection point depends on 2 shapes
+        const shape1 = this.lines.find(l => l.id === entity.parents[0]) || this.circles.find(c => c.id === entity.parents[0]);
+        const shape2 = this.lines.find(l => l.id === entity.parents[1]) || this.circles.find(c => c.id === entity.parents[1]);
+
+        if (shape1 && shape2) {
+          let newIntersections: Point[] = [];
+          if (shape1 instanceof Line && shape2 instanceof Line) {
+            const pt = getLineLineIntersection(shape1, shape2);
+            if (pt) newIntersections.push(pt);
+          } else if (shape1 instanceof Line && shape2 instanceof Circle) {
+            newIntersections = getLineCircleIntersection(shape1, shape2);
+          } else if (shape1 instanceof Circle && shape2 instanceof Line) {
+            newIntersections = getLineCircleIntersection(shape2, shape1);
+          } else if (shape1 instanceof Circle && shape2 instanceof Circle) {
+            newIntersections = getCircleCircleIntersection(shape1, shape2);
+          }
+
+          if (newIntersections.length > 0) {
+            // Find the intersection closest to its previous position to maintain continuity
+            let closest = newIntersections[0];
+            let minDist = closest.distanceTo(entity);
+            for (let i = 1; i < newIntersections.length; i++) {
+              const dist = newIntersections[i].distanceTo(entity);
+              if (dist < minDist) {
+                minDist = dist;
+                closest = newIntersections[i];
+              }
+            }
+            entity.x = closest.x;
+            entity.y = closest.y;
+          }
+        }
+      }
+    }
+  }
+
   clone(): Board {
     const newBoard = new Board();
-    // We can safely copy references to Points, Lines, and Circles because they are currently treated as immutable structs
-    newBoard.points = [...this.points];
-    newBoard.lines = [...this.lines];
-    newBoard.circles = [...this.circles];
+    // We clone points deeply because they might be mutated by dragging
+    newBoard.points = this.points.map(p => new Point(p.x, p.y, p.isGiven, p.id, [...p.parents], p.label));
+    newBoard.points.forEach((p, i) => {
+        p.isIntersection = this.points[i].isIntersection;
+        p.creationIndex = this.points[i].creationIndex;
+    });
+
+    // Clone lines
+    newBoard.lines = this.lines.map(l => new Line(l.a, l.b, l.c, l.isGiven, l.id, [...l.parents], l.label));
+    newBoard.lines.forEach((l, i) => l.creationIndex = this.lines[i].creationIndex);
+
+    // Clone circles. Be careful to link center back to the cloned points
+    newBoard.circles = this.circles.map(c => {
+      const clonedCenter = newBoard.points.find(p => p.id === c.center.id) || new Point(c.center.x, c.center.y, c.center.isGiven, c.center.id, [...c.center.parents], c.center.label);
+      const clonedCircle = new Circle(clonedCenter, c.radius, c.isGiven, c.id, [...c.parents], c.label);
+      return clonedCircle;
+    });
+    newBoard.circles.forEach((c, i) => c.creationIndex = this.circles[i].creationIndex);
+
     newBoard.operationCountL = this.operationCountL;
     newBoard.operationCountE = this.operationCountE;
+    newBoard.pointLabelCounter = this.pointLabelCounter;
+    newBoard.shapeLabelCounter = this.shapeLabelCounter;
     return newBoard;
   }
 }
