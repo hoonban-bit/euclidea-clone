@@ -16,7 +16,10 @@ export class PointTool implements Tool {
     // In a real puzzle game like Euclidea, you can only create points ON intersections
     // or existing shapes. But for now, we'll allow creating free points if no snap exists.
     if (snapped) {
-      return board.addPoint(snapped);
+      const permanentPoint = new Point(snapped.x, snapped.y, snapped.isGiven, snapped.id, [...snapped.parents], snapped.label);
+      permanentPoint.isIntersection = false;
+      permanentPoint.creationIndex = snapped.creationIndex;
+      return board.addPoint(permanentPoint);
     } else {
       return board.addPoint(rawPoint);
     }

@@ -22,9 +22,19 @@ export class Board {
   }
 
   addPoint(p: Point): Board {
-    if (this.points.some(existing => existing.equals(p))) {
-      return this; // Point already exists
+    const existingIndex = this.points.findIndex(existing => existing.equals(p));
+    if (existingIndex !== -1) {
+      const existingPoint = this.points[existingIndex];
+      // If the point exists as a temporary intersection, but we are explicitly adding it
+      // (e.g. user snapped to it while drawing), we convert it to a permanent point.
+      if (existingPoint.isIntersection && !p.isIntersection) {
+         const newBoard = this.clone();
+         newBoard.points[existingIndex].isIntersection = false;
+         return newBoard;
+      }
+      return this; // Point already exists and is permanent, or both are intersections
     }
+
     const newBoard = this.clone();
     if (!p.label) {
       p.label = newBoard.generateLabel(newBoard.pointLabelCounter++, true);

@@ -13,7 +13,13 @@ export class CircleTool implements Tool {
 
   onDown(rawPoint: Point, board: Board): Board {
     const snapped = board.getSnapPoint(rawPoint, this.snapRadius);
-    this.startPoint = snapped || rawPoint;
+    if (snapped) {
+       this.startPoint = new Point(snapped.x, snapped.y, snapped.isGiven, snapped.id, [...snapped.parents], snapped.label);
+       this.startPoint.isIntersection = false;
+       this.startPoint.creationIndex = snapped.creationIndex;
+    } else {
+       this.startPoint = rawPoint;
+    }
     
     // Auto-add the start point to the board if it's new
     return board.addPoint(this.startPoint);
@@ -29,7 +35,14 @@ export class CircleTool implements Tool {
     if (!this.startPoint) return board;
 
     const snapped = board.getSnapPoint(rawPoint, this.snapRadius);
-    const endPoint = snapped || rawPoint;
+    let endPoint: Point;
+    if (snapped) {
+       endPoint = new Point(snapped.x, snapped.y, snapped.isGiven, snapped.id, [...snapped.parents], snapped.label);
+       endPoint.isIntersection = false;
+       endPoint.creationIndex = snapped.creationIndex;
+    } else {
+       endPoint = rawPoint;
+    }
 
     let currentBoard = board;
 
